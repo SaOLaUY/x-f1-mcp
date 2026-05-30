@@ -21,14 +21,7 @@ async function buildScraper(): Promise<Scraper> {
     `ct0=${getEnv("X_CT0")}`,
   ]);
 
-  const isLoggedIn = await scraper.isLoggedIn();
-  if (!isLoggedIn) {
-    throw new Error(
-      "Cookie authentication failed. Make sure X_AUTH_TOKEN and X_CT0 are valid and not expired."
-    );
-  }
-
-  console.log("[x-f1-mcp] Authenticated via cookies ✓");
+  console.log("[x-f1-mcp] Cookies loaded ✓");
   return scraper;
 }
 
