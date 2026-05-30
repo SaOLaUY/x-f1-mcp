@@ -116,8 +116,8 @@ const F1_ACCOUNTS = [
 ];
 
 const F1_QUALIFYING_KEYWORDS = [
-  "qualy", "qualifying", "clasificación", "pole position",
-  "Q1", "Q2", "Q3", "fastest lap", "vuelta rápida",
+  "qualy", "qualifying", "clasificacion", "pole position",
+  "Q1", "Q2", "Q3", "fastest lap", "vuelta rapida",
   "tiempos", "sector", "grid"
 ];
 
@@ -142,7 +142,7 @@ export async function createServer(): Promise<McpServer> {
           "Search query. Examples: 'colapinto monaco qualy', 'alpine F1 monaco 2026', '#MonacoGP'"
         ),
         limit: z.number().min(1).max(50).default(20).describe(
-          "Max tweets to return (1–50). Default 20."
+          "Max tweets to return (1-50). Default 20."
         ),
         mode: z.enum(["latest", "top"]).default("latest").describe(
           "'latest' for real-time monitoring during live events. 'top' for most engaged posts."
@@ -169,7 +169,7 @@ export async function createServer(): Promise<McpServer> {
           "X username without @. Examples: 'F1', 'AlpineF1Team', 'francocolapinto'"
         ),
         limit: z.number().min(1).max(50).default(10).describe(
-          "Max tweets to return (1–50). Default 10."
+          "Max tweets to return (1-50). Default 10."
         )
       }
     },
@@ -219,7 +219,7 @@ export async function createServer(): Promise<McpServer> {
           "Session name for context. Examples: 'Monaco GP Qualifying 2026', 'Monaco FP2', 'Monaco GP Race'"
         ),
         limit: z.number().min(1).max(30).default(15).describe(
-          "Max tweets per account (1–30). Default 15."
+          "Max tweets per account (1-30). Default 15."
         ),
         accounts: z.array(z.string()).optional().describe(
           "Override the default F1 account list. Omit to use all default accounts."
@@ -330,9 +330,9 @@ export async function createServer(): Promise<McpServer> {
     async ({ region, limit }) =>
       safeTool(async () => {
         const queries: Record<string, string> = {
-          global: "F1 OR "Formula 1" OR Colapinto",
-          argentina: "Colapinto OR "F1 argentina" OR "formula 1" -filter:retweets",
-          spain: "F1 OR "Formula 1" OR Colapinto lang:es -filter:retweets"
+          global: "F1 OR \"Formula 1\" OR Colapinto",
+          argentina: "Colapinto OR \"F1 argentina\" OR \"formula 1\" -filter:retweets",
+          spain: "F1 OR \"Formula 1\" OR Colapinto lang:es -filter:retweets"
         };
 
         const query = queries[region];
