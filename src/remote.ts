@@ -50,10 +50,18 @@ app.post("/mcp", async (req, res) => {
 
 app.get("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId || !transports.has(sessionId)) {
+
+  // No session ID = connector health check (e.g. Perplexity probing the endpoint)
+  if (!sessionId) {
+    res.status(200).json({ ok: true, service: "x-f1-mcp", transport: "streamable-http" });
+    return;
+  }
+
+  if (!transports.has(sessionId)) {
     res.status(400).send("Invalid or missing session ID");
     return;
   }
+
   await transports.get(sessionId)!.handleRequest(req, res);
 });
 
