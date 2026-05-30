@@ -16,12 +16,13 @@ function getEnv(key: string): string {
 async function buildScraper(): Promise<Scraper> {
   const scraper = new Scraper();
 
-  await scraper.setCookies([
-    `auth_token=${getEnv("X_AUTH_TOKEN")}`,
-    `ct0=${getEnv("X_CT0")}`,
-  ]);
+  await scraper.login(
+    getEnv("X_USERNAME"),
+    getEnv("X_PASSWORD"),
+    getEnv("X_EMAIL"),
+  );
 
-  console.log("[x-f1-mcp] Cookies loaded ✓");
+  console.log("[x-f1-mcp] Logged in ✓");
   return scraper;
 }
 
