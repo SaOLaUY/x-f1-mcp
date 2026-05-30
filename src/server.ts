@@ -16,11 +16,9 @@ function getEnv(key: string): string {
 async function buildScraper(): Promise<Scraper> {
   const scraper = new Scraper();
 
-  // agent-twitter-client passes these strings directly to tough-cookie,
-  // which requires the "name=value; domain=.x.com; path=/; ..." format.
   await scraper.setCookies([
-    `auth_token=${getEnv("X_AUTH_TOKEN")}; Domain=.x.com; Path=/; Secure; HttpOnly`,
-    `ct0=${getEnv("X_CT0")}; Domain=.x.com; Path=/; Secure`,
+    `auth_token=${getEnv("X_AUTH_TOKEN")}`,
+    `ct0=${getEnv("X_CT0")}`,
   ]);
 
   const isLoggedIn = await scraper.isLoggedIn();
