@@ -15,11 +15,33 @@ function getEnv(key: string): string {
 
 async function buildScraper(): Promise<Scraper> {
   const scraper = new Scraper();
-  await scraper.login(
-    getEnv("X_USERNAME"),
-    getEnv("X_PASSWORD"),
-    getEnv("X_EMAIL")
-  );
+  await scraper.setCookies([
+    {
+      key: "auth_token",
+      value: getEnv("X_AUTH_TOKEN"),
+      domain: ".x.com",
+      path: "/",
+      secure: true,
+      httpOnly: true,
+    },
+    {
+      key: "ct0",
+      value: getEnv("X_CT0"),
+      domain: ".x.com",
+      path: "/",
+      secure: true,
+      httpOnly: false,
+    },
+  ]);
+
+  const isLoggedIn = await scraper.isLoggedIn();
+  if (!isLoggedIn) {
+    throw new Error(
+      "Cookie authentication failed. Make sure X_AUTH_TOKEN and X_CT0 are valid and not expired."
+    );
+  }
+
+  console.log("[x-f1-mcp] Authenticated via cookies ✓");
   return scraper;
 }
 
