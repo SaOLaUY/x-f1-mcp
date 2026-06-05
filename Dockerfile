@@ -1,4 +1,4 @@
-# ── Stage 1: build ───────────────────────────────────────────────────────────
+# ── Stage 1: build ─────────────────────────────────────────────────────────────────────────
 FROM node:22 AS builder
 WORKDIR /app
 
@@ -6,10 +6,13 @@ COPY package*.json ./
 RUN npm ci
 
 COPY tsconfig.json ./
+
+# Cache bust: increment when Docker ignores src/ changes
+ARG CACHEBUST=2
 COPY src/ ./src/
 RUN npm run build
 
-# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────────────────────
 FROM node:22-slim AS runtime
 WORKDIR /app
 
