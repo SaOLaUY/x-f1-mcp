@@ -19,25 +19,10 @@ async function buildScraper(): Promise<Scraper> {
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
 
+  // tough-cookie requires cookie strings, not objects
   await scraper.setCookies([
-    {
-      key: "auth_token",
-      value: authToken,
-      domain: ".twitter.com",
-      path: "/",
-      secure: true,
-      httpOnly: true,
-      sameSite: "None",
-    },
-    {
-      key: "ct0",
-      value: ct0,
-      domain: ".twitter.com",
-      path: "/",
-      secure: true,
-      httpOnly: false,
-      sameSite: "Lax",
-    },
+    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
   ]);
 
   const isLoggedIn = await scraper.isLoggedIn();
