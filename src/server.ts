@@ -41,17 +41,26 @@ type TweetSummary = {
   url: string;
 };
 
+type AccountTweet = {
+  id: string;
+  text: string;
+  username: string;
+  createdAt: string;
+  likes: number;
+  retweets: number;
+  url: string;
+};
+
+type AccountResult = {
+  username: string;
+  tweets: AccountTweet[];
+};
+
 function buildTweetSummaries(data: Record<string, unknown>): TweetSummary[] {
   const tweets = (data.data as Record<string, unknown>[] | undefined) ?? [];
   const users: Record<string, Record<string, unknown>> = {};
 
   const includes = data.includes as Record<string, unknown> | undefined;
-  if (includes?.authors) {
-    for (const u of includes.authors as Record<string, unknown>[]) {
-      users[String(u.id)] = u;
-    }
-  }
-  // expansions puts users under includes.users
   if (includes?.users) {
     for (const u of includes.users as Record<string, unknown>[]) {
       users[String(u.id)] = u;
@@ -100,7 +109,7 @@ const F1_ACCOUNTS_IDS: Record<string, string> = {
 };
 
 export async function createServer(): Promise<McpServer> {
-  console.log("[x-f1-mcp] Starting with X API v2 Bearer Token auth ✓");
+  console.log("[x-f1-mcp] Starting with X API v2 Bearer Token auth \u2713");
 
   const server = new McpServer({ name: "x-f1-mcp", version: "0.1.0" });
 
@@ -161,11 +170,9 @@ export async function createServer(): Promise<McpServer> {
     },
     async ({ username, limit }) =>
       safeTool(async () => {
-        // Resolve username to user id first
-        const userdata = await xFetch(`/users/by/username/${username}?${USER_FIELDS}`) as Record<string, unknown>;
+        const userdata = await xFetch(`/users/by/username/${username}?${USER_FIELDS}`);
         const user = userdata.data as Record<string, unknown>;
         if (!user) throw new Error(`User @${username} not found`);
-
         const params = new URLSearchParams({
           max_results: String(Math.max(5, Math.min(limit, 100))),
           exclude: "retweets,replies",
@@ -196,7 +203,7 @@ export async function createServer(): Promise<McpServer> {
     },
     async ({ username }) =>
       safeTool(async () => {
-        const data = await xFetch(`/users/by/username/${username}?${USER_FIELDS}&user.fields=public_metrics,description`) as Record<string, unknown>;
+        const data = await xFetch(`/users/by/username/${username}?${USER_FIELDS}`);
         const user = data.data as Record<string, unknown>;
         if (!user) throw new Error(`User @${username} not found`);
         const metrics = (user.public_metrics as Record<string, unknown>) ?? {};
@@ -227,7 +234,7 @@ export async function createServer(): Promise<McpServer> {
         const queries: Record<string, string> = {
           global: "(F1 OR \"Formula 1\") -is:retweet",
           colapinto: "Colapinto -is:retweet",
-          monaco: "(Monaco GP OR MonacoGP OR \"Gran Premio de Monaco\") -is:retweet",
+          monaco: "(MonacoGP OR \"Monaco GP\") -is:retweet",
         };
         const params = new URLSearchParams({
           query: queries[focus],
@@ -251,14 +258,14 @@ export async function createServer(): Promise<McpServer> {
     },
     async ({ limit_per_account }) =>
       safeTool(async () => {
-        const results = await Promise.allSettled(
-          Object.entries(F1_ACCOUNTS_IDS).map(async ([username, userId]) => {
+        const settled = await Promise.allSettled(
+          Object.entries(F1_ACCOUNTS_IDS).map(async ([username, userId]): Promise<AccountResult> => {
             const params = new URLSearchParams({
               max_results: String(Math.max(5, limit_per_account)),
               exclude: "retweets,replies",
             });
             const data = await xFetch(`/users/${userId}/tweets?${params}&${TWEET_FIELDS}`);
-            const tweets = ((data.data as Record<string, unknown>[] | undefined) ?? []).map((t) => ({
+            const tweets: AccountTweet[] = ((data.data as Record<string, unknown>[] | undefined) ?? []).map((t) => ({
               id: String(t.id),
               text: String(t.text),
               username,
@@ -270,8 +277,8 @@ export async function createServer(): Promise<McpServer> {
             return { username, tweets };
           })
         );
-        const feed = results
-          .filter((r): r is PromiseFulfilledResult<{ username: string; tweets: unknown[] }> => r.status === "fulfilled")
+        const feed: AccountTweet[] = settled
+          .filter((r): r is PromiseFulfilledResult<AccountResult> => r.status === "fulfilled")
           .flatMap((r) => r.value.tweets);
         return jsonContent({ accountsMonitored: Object.keys(F1_ACCOUNTS_IDS).length, count: feed.length, feed });
       })
@@ -290,7 +297,7 @@ export async function createServer(): Promise<McpServer> {
         const id = tweetId.includes("x.com") || tweetId.includes("twitter.com")
           ? tweetId.split("/").pop()!
           : tweetId;
-        const data = await xFetch(`/tweets/${id}?${TWEET_FIELDS}`) as Record<string, unknown>;
+        const data = await xFetch(`/tweets/${id}?${TWEET_FIELDS}`);
         return jsonContent(data.data ?? { error: true, message: "Tweet not found" });
       })
   );
