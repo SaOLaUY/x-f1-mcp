@@ -13,7 +13,6 @@ function getEnv(key: string): string {
 const BEARER_TOKEN = getEnv("X_BEARER_TOKEN");
 
 const BASE = "https://api.twitter.com/2";
-
 const TWEET_FIELDS = "tweet.fields=id,text,created_at,public_metrics,author_id";
 const USER_FIELDS = "user.fields=id,name,username,verified,public_metrics,description";
 const EXPANSIONS = "expansions=author_id";
@@ -41,32 +40,15 @@ type TweetSummary = {
   url: string;
 };
 
-type AccountTweet = {
-  id: string;
-  text: string;
-  username: string;
-  createdAt: string;
-  likes: number;
-  retweets: number;
-  url: string;
-};
-
-type AccountResult = {
-  username: string;
-  tweets: AccountTweet[];
-};
-
 function buildTweetSummaries(data: Record<string, unknown>): TweetSummary[] {
   const tweets = (data.data as Record<string, unknown>[] | undefined) ?? [];
   const users: Record<string, Record<string, unknown>> = {};
-
   const includes = data.includes as Record<string, unknown> | undefined;
   if (includes?.users) {
     for (const u of includes.users as Record<string, unknown>[]) {
       users[String(u.id)] = u;
     }
   }
-
   return tweets.map((t) => {
     const metrics = (t.public_metrics as Record<string, unknown>) ?? {};
     const author = users[String(t.author_id)] ?? {};
@@ -116,7 +98,7 @@ export async function createServer(): Promise<McpServer> {
   server.registerTool(
     "search_tweets",
     {
-      description: "Search recent tweets (last 7 days) by keyword or phrase using X API v2. Perfect for monitoring live F1 events, qualifying times, race results, and paddock news.",
+      description: "Search recent tweets (last 7 days) by keyword or phrase. Perfect for live F1 events, qualifying, race results and paddock news.",
       inputSchema: {
         query: z.string().describe("Search query. Example: 'Monaco GP 2026' or '#MonacoGP'"),
         limit: z.number().min(1).max(100).default(20),
@@ -258,29 +240,32 @@ export async function createServer(): Promise<McpServer> {
     },
     async ({ limit_per_account }) =>
       safeTool(async () => {
-        const settled = await Promise.allSettled(
-          Object.entries(F1_ACCOUNTS_IDS).map(async ([username, userId]): Promise<AccountResult> => {
-            const params = new URLSearchParams({
-              max_results: String(Math.max(5, limit_per_account)),
-              exclude: "retweets,replies",
-            });
-            const data = await xFetch(`/users/${userId}/tweets?${params}&${TWEET_FIELDS}`);
-            const tweets: AccountTweet[] = ((data.data as Record<string, unknown>[] | undefined) ?? []).map((t) => ({
-              id: String(t.id),
-              text: String(t.text),
-              username,
-              createdAt: String(t.created_at ?? ""),
-              likes: Number((t.public_metrics as Record<string, unknown>)?.like_count ?? 0),
-              retweets: Number((t.public_metrics as Record<string, unknown>)?.retweet_count ?? 0),
-              url: `https://x.com/i/web/status/${t.id}`,
-            }));
-            return { username, tweets };
+        const feed: Array<Record<string, unknown>> = [];
+        const entries = Object.entries(F1_ACCOUNTS_IDS);
+        await Promise.all(
+          entries.map(async ([username, userId]) => {
+            try {
+              const params = new URLSearchParams({
+                max_results: String(Math.max(5, limit_per_account)),
+                exclude: "retweets,replies",
+              });
+              const data = await xFetch(`/users/${userId}/tweets?${params}&${TWEET_FIELDS}`);
+              const tweets = ((data.data as Record<string, unknown>[] | undefined) ?? []).map((t) => ({
+                id: String(t.id),
+                text: String(t.text),
+                username,
+                createdAt: String(t.created_at ?? ""),
+                likes: Number((t.public_metrics as Record<string, unknown>)?.like_count ?? 0),
+                retweets: Number((t.public_metrics as Record<string, unknown>)?.retweet_count ?? 0),
+                url: `https://x.com/i/web/status/${t.id}`,
+              }));
+              feed.push(...tweets);
+            } catch {
+              // skip failed accounts silently
+            }
           })
         );
-        const feed: AccountTweet[] = settled
-          .filter((r): r is PromiseFulfilledResult<AccountResult> => r.status === "fulfilled")
-          .flatMap((r) => r.value.tweets);
-        return jsonContent({ accountsMonitored: Object.keys(F1_ACCOUNTS_IDS).length, count: feed.length, feed });
+        return jsonContent({ accountsMonitored: entries.length, count: feed.length, feed });
       })
   );
 
