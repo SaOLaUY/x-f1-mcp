@@ -19,18 +19,12 @@ async function buildScraper(): Promise<Scraper> {
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
 
-  // tough-cookie requires cookie strings, not objects
   await scraper.setCookies([
     `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
     `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
   ]);
 
-  const isLoggedIn = await scraper.isLoggedIn();
-  if (!isLoggedIn) {
-    throw new Error("[x-f1-mcp] Cookie login failed — cookies may be expired");
-  }
-
-  console.log("[x-f1-mcp] Logged in via cookies ✓");
+  console.log("[x-f1-mcp] Cookies set, scraper ready ✓");
   return scraper;
 }
 
