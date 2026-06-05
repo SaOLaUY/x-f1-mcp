@@ -19,12 +19,9 @@ async function buildScraper(): Promise<Scraper> {
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
 
-  // X operates on x.com — both domains needed for full auth
   await scraper.setCookies([
     `auth_token=${authToken}; Domain=.x.com; Path=/; Secure; HttpOnly; SameSite=None`,
-    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
     `ct0=${ct0}; Domain=.x.com; Path=/; Secure; SameSite=Lax`,
-    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
   ]);
 
   console.log("[x-f1-mcp] Cookies set, scraper ready ✓");
@@ -57,7 +54,7 @@ type ProfileSummary = {
   url: string;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function jsonContent(data: unknown) {
   return {
@@ -139,7 +136,6 @@ export async function createServer(): Promise<McpServer> {
     version: "0.1.0"
   });
 
-  // ── TOOL: search_tweets ───────────────────────────────────────────────────
   server.registerTool(
     "search_tweets",
     {
@@ -166,19 +162,14 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_user_tweets ─────────────────────────────────────────────────
   server.registerTool(
     "get_user_tweets",
     {
       description:
-        "Get the most recent tweets from a specific X account. Useful for monitoring @F1, @AlpineF1Team, @francocolapinto, or rival YouTube channels that announce their videos on X.",
+        "Get the most recent tweets from a specific X account.",
       inputSchema: {
-        username: z.string().describe(
-          "X username without @. Examples: 'F1', 'AlpineF1Team', 'francocolapinto'"
-        ),
-        limit: z.number().min(1).max(50).default(10).describe(
-          "Max tweets to return (1-50). Default 10."
-        )
+        username: z.string().describe("X username without @."),
+        limit: z.number().min(1).max(50).default(10).describe("Max tweets to return.")
       }
     },
     async ({ username, limit }) =>
@@ -189,12 +180,10 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_user_profile ────────────────────────────────────────────────
   server.registerTool(
     "get_user_profile",
     {
-      description:
-        "Get public profile information for any X account: bio, follower count, tweet count, and verification status.",
+      description: "Get public profile information for any X account.",
       inputSchema: {
         username: z.string().describe("X username without @.")
       }
@@ -216,29 +205,21 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: monitor_f1_live ─────────────────────────────────────────────────
   server.registerTool(
     "monitor_f1_live",
     {
       description:
-        "Monitor live F1 session tweets from official accounts and journalists. Returns the latest tweets from key F1 accounts filtered by session-related keywords. Ideal during qualifying, practice, or race.",
+        "Monitor live F1 session tweets from official accounts filtered by session keywords.",
       inputSchema: {
-        session: z.string().describe(
-          "Session name for context. Examples: 'Monaco GP Qualifying 2026', 'Monaco FP2', 'Monaco GP Race'"
-        ),
-        limit: z.number().min(1).max(30).default(15).describe(
-          "Max tweets per account (1-30). Default 15."
-        ),
-        accounts: z.array(z.string()).optional().describe(
-          "Override the default F1 account list. Omit to use all default accounts."
-        )
+        session: z.string().describe("Session name. Example: 'Monaco GP Qualifying 2026'"),
+        limit: z.number().min(1).max(30).default(15),
+        accounts: z.array(z.string()).optional()
       }
     },
     async ({ session, limit, accounts }) =>
       safeTool(async () => {
         const targetAccounts = accounts ?? F1_ACCOUNTS;
         const keywordFilter = [...F1_QUALIFYING_KEYWORDS, session.toLowerCase()];
-
         const results = await Promise.allSettled(
           targetAccounts.map(async (username) => {
             const gen = scraper.getTweets(username, limit);
@@ -249,90 +230,21 @@ export async function createServer(): Promise<McpServer> {
             return { username, filtered };
           })
         );
-
         const feed = results
-          .filter((r): r is PromiseFulfilledResult<{ username: string; filtered: TweetSummary[] }> =>
-            r.status === "fulfilled"
-          )
+          .filter((r): r is PromiseFulfilledResult<{ username: string; filtered: TweetSummary[] }> => r.status === "fulfilled")
           .flatMap((r) => r.value.filtered)
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
         return jsonContent({ session, accountsMonitored: targetAccounts.length, count: feed.length, feed });
       })
   );
 
-  // ── TOOL: search_competitor_content ───────────────────────────────────────
-  server.registerTool(
-    "search_competitor_content",
-    {
-      description:
-        "Search what competitor YouTube channels are posting about on X. Detects uncovered topics by comparing competitor announcements with a given subject.",
-      inputSchema: {
-        topic: z.string().describe(
-          "Topic to check coverage for. Examples: 'colapinto monaco qualifying', 'alpine FIA restriction monaco'"
-        ),
-        competitorAccounts: z.array(z.string()).default([
-          "F1conMate", "MotorlandF1", "f1noticias_es", "RacingNews365", "autosport"
-        ]).describe(
-          "X handles of competitor channels/accounts to scan."
-        ),
-        limit: z.number().min(1).max(20).default(10).describe(
-          "Max tweets per account."
-        )
-      }
-    },
-    async ({ topic, competitorAccounts, limit }) =>
-      safeTool(async () => {
-        const topicWords = topic.toLowerCase().split(" ");
-
-        const results = await Promise.allSettled(
-          competitorAccounts.map(async (username) => {
-            const gen = scraper.getTweets(username, limit);
-            const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
-            const covered = tweets.filter((t) =>
-              topicWords.some((word) => t.text.toLowerCase().includes(word))
-            );
-            return { username, covered, total: tweets.length };
-          })
-        );
-
-        const coverage = results
-          .filter((r): r is PromiseFulfilledResult<{ username: string; covered: TweetSummary[]; total: number }> =>
-            r.status === "fulfilled"
-          )
-          .map((r) => ({
-            account: r.value.username,
-            hasCovered: r.value.covered.length > 0,
-            coverageCount: r.value.covered.length,
-            relevantTweets: r.value.covered
-          }));
-
-        const uncoveredBy = coverage.filter((c) => !c.hasCovered).map((c) => c.account);
-        const coveredBy = coverage.filter((c) => c.hasCovered).map((c) => c.account);
-
-        return jsonContent({
-          topic,
-          uncoveredBy,
-          coveredBy,
-          gapDetected: uncoveredBy.length > 0,
-          details: coverage
-        });
-      })
-  );
-
-  // ── TOOL: get_trending_f1 ─────────────────────────────────────────────────
   server.registerTool(
     "get_trending_f1",
     {
-      description:
-        "Search top trending tweets about F1 right now. Returns the most liked/retweeted F1 posts to detect hot topics for video ideas.",
+      description: "Search top trending tweets about F1 right now.",
       inputSchema: {
-        region: z.enum(["global", "argentina", "spain"]).default("argentina").describe(
-          "Region focus for trend detection."
-        ),
-        limit: z.number().min(1).max(30).default(20).describe(
-          "Max tweets to return."
-        )
+        region: z.enum(["global", "argentina", "spain"]).default("argentina"),
+        limit: z.number().min(1).max(30).default(20)
       }
     },
     async ({ region, limit }) =>
@@ -342,26 +254,20 @@ export async function createServer(): Promise<McpServer> {
           argentina: "Colapinto OR \"F1 argentina\" OR \"formula 1\" -filter:retweets",
           spain: "F1 OR \"Formula 1\" OR Colapinto lang:es -filter:retweets"
         };
-
         const query = queries[region];
         const gen = scraper.searchTweets(query, limit, SearchMode.Top);
         const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
-
         const sorted = tweets.sort((a, b) => (b.likes + b.retweets) - (a.likes + a.retweets));
-
         return jsonContent({ region, query, count: sorted.length, tweets: sorted });
       })
   );
 
-  // ── TOOL: get_tweet_by_id ─────────────────────────────────────────────────
   server.registerTool(
     "get_tweet_by_id",
     {
       description: "Fetch a single tweet by its ID or full URL.",
       inputSchema: {
-        tweetId: z.string().describe(
-          "Tweet ID (numeric string) or full x.com/twitter.com URL."
-        )
+        tweetId: z.string().describe("Tweet ID or full x.com URL.")
       }
     },
     async ({ tweetId }) =>
