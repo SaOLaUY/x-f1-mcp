@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Scraper, SearchMode } from "agent-twitter-client";
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function getEnv(key: string): string {
   const value = process.env[key];
@@ -19,8 +19,11 @@ async function buildScraper(): Promise<Scraper> {
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
 
+  // X operates on x.com — both domains needed for full auth
   await scraper.setCookies([
+    `auth_token=${authToken}; Domain=.x.com; Path=/; Secure; HttpOnly; SameSite=None`,
     `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.x.com; Path=/; Secure; SameSite=Lax`,
     `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
   ]);
 
@@ -28,7 +31,7 @@ async function buildScraper(): Promise<Scraper> {
   return scraper;
 }
 
-// ─── Shared types ────────────────────────────────────────────────────────────
+// ─── Shared types ─────────────────────────────────────────────────────────────
 
 type TweetSummary = {
   id: string;
@@ -54,7 +57,7 @@ type ProfileSummary = {
   url: string;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function jsonContent(data: unknown) {
   return {
@@ -100,7 +103,7 @@ async function collectTweets(
   return results;
 }
 
-// ─── F1 context ──────────────────────────────────────────────────────────────
+// ─── F1 context ───────────────────────────────────────────────────────────────
 
 const F1_ACCOUNTS = [
   "F1",
@@ -136,7 +139,7 @@ export async function createServer(): Promise<McpServer> {
     version: "0.1.0"
   });
 
-  // ── TOOL: search_tweets ─────────────────────────────────────────────────────
+  // ── TOOL: search_tweets ───────────────────────────────────────────────────
   server.registerTool(
     "search_tweets",
     {
@@ -163,7 +166,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_user_tweets ────────────────────────────────────────────────────
+  // ── TOOL: get_user_tweets ─────────────────────────────────────────────────
   server.registerTool(
     "get_user_tweets",
     {
@@ -186,7 +189,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_user_profile ───────────────────────────────────────────────────
+  // ── TOOL: get_user_profile ────────────────────────────────────────────────
   server.registerTool(
     "get_user_profile",
     {
@@ -213,7 +216,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: monitor_f1_live ────────────────────────────────────────────────────
+  // ── TOOL: monitor_f1_live ─────────────────────────────────────────────────
   server.registerTool(
     "monitor_f1_live",
     {
@@ -258,7 +261,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: search_competitor_content ─────────────────────────────────────────
+  // ── TOOL: search_competitor_content ───────────────────────────────────────
   server.registerTool(
     "search_competitor_content",
     {
@@ -317,7 +320,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_trending_f1 ────────────────────────────────────────────────────
+  // ── TOOL: get_trending_f1 ─────────────────────────────────────────────────
   server.registerTool(
     "get_trending_f1",
     {
@@ -350,7 +353,7 @@ export async function createServer(): Promise<McpServer> {
       })
   );
 
-  // ── TOOL: get_tweet_by_id ────────────────────────────────────────────────────
+  // ── TOOL: get_tweet_by_id ─────────────────────────────────────────────────
   server.registerTool(
     "get_tweet_by_id",
     {
