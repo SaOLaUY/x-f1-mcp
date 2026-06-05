@@ -17,7 +17,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
     "zod": "^3.23.8",
-    "agent-twitter-client": "0.0.19"
+    "agent-twitter-client": "0.0.18"
   },
   "devDependencies": {
     "@types/express": "^5.0.1",

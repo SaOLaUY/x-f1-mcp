@@ -2,33 +2,44 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Scraper, SearchMode } from "agent-twitter-client";
 
-function getEnv(key: string): string {
+function getEnv(key: string, required = true): string {
   const value = process.env[key];
-  if (!value) {
+  if (!value && required) {
     console.error(`[x-f1-mcp] Missing env var: ${key}`);
     process.exit(1);
   }
-  return value;
+  return value ?? "";
 }
 
-let scraperInstance: Scraper | null = null;
-
 async function buildScraper(): Promise<Scraper> {
-  if (scraperInstance) return scraperInstance;
-
-  const username = getEnv("X_USERNAME");
-  const password = getEnv("X_PASSWORD");
-  const email = getEnv("X_EMAIL");
-
   const scraper = new Scraper();
-  console.log("[x-f1-mcp] Logging in...");
-  await scraper.login(username, password, email);
 
-  const isLoggedIn = await scraper.isLoggedIn();
-  if (!isLoggedIn) throw new Error("Login failed — check X_USERNAME, X_PASSWORD, X_EMAIL");
+  const authToken = getEnv("X_AUTH_TOKEN");
+  const ct0 = getEnv("X_CT0");
+  const twid = getEnv("X_TWID");
+  const twitterSess = getEnv("X_TWITTER_SESS", false);
+  const lang = getEnv("X_LANG", false) || "es";
 
-  console.log(`[x-f1-mcp] Logged in as @${username} ✓`);
-  scraperInstance = scraper;
+  const cookies = [
+    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
+    `twid=${twid}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `lang=${lang}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
+  ];
+
+  if (twitterSess) {
+    cookies.push(`_twitter_sess=${twitterSess}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`);
+  }
+
+  await scraper.setCookies(cookies);
+
+  try {
+    const isLoggedIn = await scraper.isLoggedIn();
+    console.log(`[x-f1-mcp] Cookies set, loggedIn=${isLoggedIn} ✓`);
+  } catch (error) {
+    console.warn("[x-f1-mcp] isLoggedIn check failed:", error);
+  }
+
   return scraper;
 }
 
