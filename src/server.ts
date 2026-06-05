@@ -20,27 +20,22 @@ async function buildScraper(): Promise<Scraper> {
   const twitterSess = getEnv("X_TWITTER_SESS", false);
   const lang = getEnv("X_LANG", false) || "es";
 
-  const cookieDomains = [".x.com", ".twitter.com"];
-  const cookies: string[] = [];
+  const cookies = [
+    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
+    `twid=${twid}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `lang=${lang}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
+  ];
 
-  for (const domain of cookieDomains) {
-    cookies.push(
-      `auth_token=${authToken}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None`,
-      `ct0=${ct0}; Domain=${domain}; Path=/; Secure; SameSite=Lax`,
-      `twid=${twid}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None`,
-      `lang=${lang}; Domain=${domain}; Path=/; Secure; SameSite=Lax`,
-    );
-
-    if (twitterSess) {
-      cookies.push(`_twitter_sess=${twitterSess}; Domain=${domain}; Path=/; Secure; HttpOnly; SameSite=None`);
-    }
+  if (twitterSess) {
+    cookies.push(`_twitter_sess=${twitterSess}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`);
   }
 
   await scraper.setCookies(cookies);
 
   try {
     const isLoggedIn = await scraper.isLoggedIn();
-    console.log(`[x-f1-mcp] Cookies set on x.com/twitter.com, loggedIn=${isLoggedIn} ✓`);
+    console.log(`[x-f1-mcp] Cookies set, loggedIn=${isLoggedIn} ✓`);
   } catch (error) {
     console.warn("[x-f1-mcp] isLoggedIn check failed:", error);
   }
