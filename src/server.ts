@@ -2,12 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Scraper, SearchMode } from "agent-twitter-client";
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
 function getEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
-    console.error(`Missing env var: ${key}`);
+    console.error(`[x-f1-mcp] Missing env var: ${key}`);
     process.exit(1);
   }
   return value;
@@ -18,17 +16,22 @@ async function buildScraper(): Promise<Scraper> {
 
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
+  const twid = process.env["X_TWID"] ?? "";
 
-  await scraper.setCookies([
-    `auth_token=${authToken}; Domain=.x.com; Path=/; Secure; HttpOnly; SameSite=None`,
-    `ct0=${ct0}; Domain=.x.com; Path=/; Secure; SameSite=Lax`,
-  ]);
+  const cookies = [
+    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
+  ];
 
-  console.log("[x-f1-mcp] Cookies set, scraper ready ✓");
+  if (twid) {
+    cookies.push(`twid=${twid}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`);
+  }
+
+  await scraper.setCookies(cookies);
+
+  console.log(`[x-f1-mcp] Cookies set (twid=${twid ? "yes" : "no"}), scraper ready ✓`);
   return scraper;
 }
-
-// ─── Shared types ─────────────────────────────────────────────────────────────
 
 type TweetSummary = {
   id: string;
@@ -54,12 +57,8 @@ type ProfileSummary = {
   url: string;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function jsonContent(data: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }]
-  };
+  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
 }
 
 async function safeTool<T>(fn: () => Promise<T>) {
@@ -81,17 +80,12 @@ function mapTweet(tweet: Record<string, unknown>): TweetSummary {
     likes: Number(tweet.likes ?? tweet.favoriteCount ?? 0),
     retweets: Number(tweet.retweets ?? tweet.retweetCount ?? 0),
     replies: Number(tweet.replies ?? tweet.replyCount ?? 0),
-    url: tweet.permanentUrl
-      ? String(tweet.permanentUrl)
-      : `https://x.com/i/web/status/${tweet.id}`,
+    url: tweet.permanentUrl ? String(tweet.permanentUrl) : `https://x.com/i/web/status/${tweet.id}`,
     isVerified: Boolean((tweet.user as Record<string, unknown>)?.isBlueVerified ?? false)
   };
 }
 
-async function collectTweets(
-  gen: AsyncGenerator<unknown>,
-  limit: number
-): Promise<TweetSummary[]> {
+async function collectTweets(gen: AsyncGenerator<unknown>, limit: number): Promise<TweetSummary[]> {
   const results: TweetSummary[] = [];
   for await (const tweet of gen) {
     results.push(mapTweet(tweet as Record<string, unknown>));
@@ -100,64 +94,37 @@ async function collectTweets(
   return results;
 }
 
-// ─── F1 context ───────────────────────────────────────────────────────────────
-
 const F1_ACCOUNTS = [
-  "F1",
-  "AlpineF1Team",
-  "francocolapinto",
-  "PierreGASLY",
-  "MercedesAMGF1",
-  "ScuderiaFerrari",
-  "McLarenF1",
-  "redbullracing",
-  "WilliamsRacing",
-  "F1Bites",
-  "autosport",
-  "motorsport",
-  "SkySportsF1",
-  "F1i_fr",
-  "RacingNews365"
+  "F1", "AlpineF1Team", "francocolapinto", "PierreGASLY",
+  "MercedesAMGF1", "ScuderiaFerrari", "McLarenF1", "redbullracing",
+  "WilliamsRacing", "F1Bites", "autosport", "motorsport",
+  "SkySportsF1", "F1i_fr", "RacingNews365"
 ];
 
 const F1_QUALIFYING_KEYWORDS = [
   "qualy", "qualifying", "clasificacion", "pole position",
-  "Q1", "Q2", "Q3", "fastest lap", "vuelta rapida",
-  "tiempos", "sector", "grid"
+  "Q1", "Q2", "Q3", "fastest lap", "vuelta rapida", "tiempos", "sector", "grid"
 ];
-
-// ─── Server factory ───────────────────────────────────────────────────────────
 
 export async function createServer(): Promise<McpServer> {
   const scraper = await buildScraper();
 
-  const server = new McpServer({
-    name: "x-f1-mcp",
-    version: "0.1.0"
-  });
+  const server = new McpServer({ name: "x-f1-mcp", version: "0.1.0" });
 
   server.registerTool(
     "search_tweets",
     {
-      description:
-        "Search recent tweets by keyword or phrase. Perfect for monitoring live F1 events, qualifying times, race results, and paddock news in real time.",
+      description: "Search recent tweets by keyword or phrase. Perfect for monitoring live F1 events, qualifying times, race results, and paddock news in real time.",
       inputSchema: {
-        query: z.string().describe(
-          "Search query. Examples: 'colapinto monaco qualy', 'alpine F1 monaco 2026', '#MonacoGP'"
-        ),
-        limit: z.number().min(1).max(50).default(20).describe(
-          "Max tweets to return (1-50). Default 20."
-        ),
-        mode: z.enum(["latest", "top"]).default("latest").describe(
-          "'latest' for real-time monitoring during live events. 'top' for most engaged posts."
-        )
+        query: z.string().describe("Search query. Examples: 'colapinto monaco qualy', '#MonacoGP'"),
+        limit: z.number().min(1).max(50).default(20),
+        mode: z.enum(["latest", "top"]).default("latest")
       }
     },
     async ({ query, limit, mode }) =>
       safeTool(async () => {
         const searchMode = mode === "top" ? SearchMode.Top : SearchMode.Latest;
-        const gen = scraper.searchTweets(query, limit, searchMode);
-        const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
+        const tweets = await collectTweets(scraper.searchTweets(query, limit, searchMode) as AsyncGenerator<unknown>, limit);
         return jsonContent({ query, mode, count: tweets.length, tweets });
       })
   );
@@ -165,17 +132,15 @@ export async function createServer(): Promise<McpServer> {
   server.registerTool(
     "get_user_tweets",
     {
-      description:
-        "Get the most recent tweets from a specific X account.",
+      description: "Get the most recent tweets from a specific X account.",
       inputSchema: {
         username: z.string().describe("X username without @."),
-        limit: z.number().min(1).max(50).default(10).describe("Max tweets to return.")
+        limit: z.number().min(1).max(50).default(10)
       }
     },
     async ({ username, limit }) =>
       safeTool(async () => {
-        const gen = scraper.getTweets(username, limit);
-        const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
+        const tweets = await collectTweets(scraper.getTweets(username, limit) as AsyncGenerator<unknown>, limit);
         return jsonContent({ username, count: tweets.length, tweets });
       })
   );
@@ -184,9 +149,7 @@ export async function createServer(): Promise<McpServer> {
     "get_user_profile",
     {
       description: "Get public profile information for any X account.",
-      inputSchema: {
-        username: z.string().describe("X username without @.")
-      }
+      inputSchema: { username: z.string().describe("X username without @.") }
     },
     async ({ username }) =>
       safeTool(async () => {
@@ -208,8 +171,7 @@ export async function createServer(): Promise<McpServer> {
   server.registerTool(
     "monitor_f1_live",
     {
-      description:
-        "Monitor live F1 session tweets from official accounts filtered by session keywords.",
+      description: "Monitor live F1 session tweets from official accounts filtered by session keywords.",
       inputSchema: {
         session: z.string().describe("Session name. Example: 'Monaco GP Qualifying 2026'"),
         limit: z.number().min(1).max(30).default(15),
@@ -222,8 +184,7 @@ export async function createServer(): Promise<McpServer> {
         const keywordFilter = [...F1_QUALIFYING_KEYWORDS, session.toLowerCase()];
         const results = await Promise.allSettled(
           targetAccounts.map(async (username) => {
-            const gen = scraper.getTweets(username, limit);
-            const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
+            const tweets = await collectTweets(scraper.getTweets(username, limit) as AsyncGenerator<unknown>, limit);
             const filtered = tweets.filter((t) =>
               keywordFilter.some((kw) => t.text.toLowerCase().includes(kw.toLowerCase()))
             );
@@ -255,8 +216,7 @@ export async function createServer(): Promise<McpServer> {
           spain: "F1 OR \"Formula 1\" OR Colapinto lang:es -filter:retweets"
         };
         const query = queries[region];
-        const gen = scraper.searchTweets(query, limit, SearchMode.Top);
-        const tweets = await collectTweets(gen as AsyncGenerator<unknown>, limit);
+        const tweets = await collectTweets(scraper.searchTweets(query, limit, SearchMode.Top) as AsyncGenerator<unknown>, limit);
         const sorted = tweets.sort((a, b) => (b.likes + b.retweets) - (a.likes + a.retweets));
         return jsonContent({ region, query, count: sorted.length, tweets: sorted });
       })
@@ -266,9 +226,7 @@ export async function createServer(): Promise<McpServer> {
     "get_tweet_by_id",
     {
       description: "Fetch a single tweet by its ID or full URL.",
-      inputSchema: {
-        tweetId: z.string().describe("Tweet ID or full x.com URL.")
-      }
+      inputSchema: { tweetId: z.string().describe("Tweet ID or full x.com URL.") }
     },
     async ({ tweetId }) =>
       safeTool(async () => {
