@@ -20,15 +20,19 @@ async function buildScraper(): Promise<Scraper> {
   const twitterSess = getEnv("X_TWITTER_SESS", false);
   const lang = getEnv("X_LANG", false) || "es";
 
+  // Pass cookies as objects — tough-cookie stores them correctly for both
+  // twitter.com and the internal getCookieValue('ct0') lookup that builds x-csrf-token
   const cookies = [
-    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
-    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
-    `twid=${twid}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
-    `lang=${lang}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
-  ];
+    { key: "auth_token", value: authToken, domain: "twitter.com", path: "/", secure: true, httpOnly: true },
+    { key: "ct0",        value: ct0,       domain: "twitter.com", path: "/", secure: true, httpOnly: false },
+    { key: "twid",       value: twid,      domain: "twitter.com", path: "/", secure: true, httpOnly: true },
+    { key: "lang",       value: lang,      domain: "twitter.com", path: "/", secure: true, httpOnly: false },
+  ] as Parameters<typeof scraper.setCookies>[0];
 
   if (twitterSess) {
-    cookies.push(`_twitter_sess=${twitterSess}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`);
+    (cookies as Array<Record<string, unknown>>).push(
+      { key: "_twitter_sess", value: twitterSess, domain: "twitter.com", path: "/", secure: true, httpOnly: true }
+    );
   }
 
   await scraper.setCookies(cookies);
