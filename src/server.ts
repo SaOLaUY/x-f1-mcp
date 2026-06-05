@@ -16,20 +16,15 @@ async function buildScraper(): Promise<Scraper> {
 
   const authToken = getEnv("X_AUTH_TOKEN");
   const ct0 = getEnv("X_CT0");
-  const twid = process.env["X_TWID"] ?? "";
+  const twid = getEnv("X_TWID");
 
-  const cookies = [
-    `auth_token=${authToken}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`,
-    `ct0=${ct0}; Domain=.twitter.com; Path=/; Secure; SameSite=Lax`,
-  ];
+  await scraper.setCookies([
+    `auth_token=${authToken}; Domain=.x.com; Path=/; Secure; HttpOnly; SameSite=None`,
+    `ct0=${ct0}; Domain=.x.com; Path=/; Secure; SameSite=Lax`,
+    `twid=${twid}; Domain=.x.com; Path=/; Secure; HttpOnly; SameSite=None`,
+  ]);
 
-  if (twid) {
-    cookies.push(`twid=${twid}; Domain=.twitter.com; Path=/; Secure; HttpOnly; SameSite=None`);
-  }
-
-  await scraper.setCookies(cookies);
-
-  console.log(`[x-f1-mcp] Cookies set (twid=${twid ? "yes" : "no"}), scraper ready ✓`);
+  console.log("[x-f1-mcp] Cookies set, scraper ready ✓");
   return scraper;
 }
 
@@ -108,7 +103,6 @@ const F1_QUALIFYING_KEYWORDS = [
 
 export async function createServer(): Promise<McpServer> {
   const scraper = await buildScraper();
-
   const server = new McpServer({ name: "x-f1-mcp", version: "0.1.0" });
 
   server.registerTool(
